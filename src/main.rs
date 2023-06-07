@@ -1,5 +1,6 @@
 use reqwest::Client;
 use tl::ParserOptions;
+mod crawler;
 
 #[tokio::main]
 async fn main() -> reqwest::Result<()> {
