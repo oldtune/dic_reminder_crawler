@@ -1,23 +1,49 @@
+use anyhow::Error;
+use async_trait::async_trait;
+use reqwest::Request;
+
 pub mod entoen;
 pub mod entovi;
 
+#[async_trait]
 pub trait WordCrawler {
-    fn crawl(&self, word: &str) -> Result<WordDefinition, CrawlError>;
+    async fn crawl(&self, word: &str) -> anyhow::Result<WordDefinition>;
 }
 
-pub enum CrawlError {}
+// #[derive(Error, Debug)]
+// pub enum CrawlError {
+//     #[error("Failed to send request")]
+//     RequestError(#[from] reqwest::Error),
+//     #[error("Failed to parse html content")]
+//     ParsingError,
+//     OtherError(#[from] String),
+// }
 
+#[derive(Debug)]
 pub struct WordDefinition {
     pub word: String,
+    pronounce: String,
     pub type_and_definitions: Vec<WordTypeDefinition>,
 }
 
+impl WordDefinition {
+    pub fn new(word: &str, pronounce: &str) -> Self {
+        Self {
+            word: word.to_string(),
+            pronounce: pronounce.to_string(),
+            type_and_definitions: vec![],
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct WordTypeDefinition {
     pub word_type: WordType,
     pub meaning: Vec<String>,
     pub example: Vec<String>,
 }
 
+#[derive(Debug)]
 pub enum WordType {
     Verb,
     Noun,

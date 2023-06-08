@@ -11,9 +11,3 @@ impl EnToEnCrawler {
         }
     }
 }
-
-impl WordCrawler for EnToEnCrawler {
-    fn crawl(&self, word: &str) -> Result<super::WordDefinition, super::CrawlError> {
-        todo!()
-    }
-}
