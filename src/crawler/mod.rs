@@ -56,7 +56,10 @@ pub struct Example {
 
 #[derive(Debug)]
 pub enum WordType {
-    Verb,
+    //ngoai dong tu
+    TransitiveVerb,
+    //noi dong tu
+    InTransitiveVerb,
     Noun,
     Pronounce,
     Adjective,

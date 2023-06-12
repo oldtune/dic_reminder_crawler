@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, thread::current};
 
 use anyhow::bail;
 use async_trait::async_trait;
@@ -130,22 +130,54 @@ impl EnToViCrawler {
         ));
     }
 
-    fn extract_ub_e_em(tags: Vec<&HTMLTag>, parser: &Parser) -> Vec<WordTypeDefinition> {
-        // let result = vec![];
+    fn extract_word_type_definition(
+        &self,
+        tags: Vec<&HTMLTag>,
+        parser: &Parser,
+    ) -> Vec<WordTypeDefinition> {
+        let mut result = vec![];
 
-        // let mut current_word_type = None;
+        let mut current_word_type: Option<WordTypeDefinition> = None;
 
-        // for tag in tags {
-        //     if parser.has_class(tag, "ub") {
-        //         let inner_text = parser.inner_text(tag)
-        //     }
-        // }
+        for tag in tags {
+            if parser.has_class(tag, "ub") {
+                let inner_text = parser.inner_text(tag);
+                let word_type = self.parse_word_type(&inner_text);
+                if word_type.is_none() {
+                    let error = format!("Cannot parse this word type {}", inner_text);
+                    println!("{}", error);
+                    panic!("encoutered error");
+                }
 
-        // result
-        todo!()
+                if current_word_type.is_some() {
+                    result.push(current_word_type.unwrap());
+                }
+
+                current_word_type = Some(WordTypeDefinition {
+                    word_type: word_type.unwrap(),
+                    meaning: vec![],
+                });
+            }
+
+            if parser.has_class(tag, "m") {
+                //add word
+            }
+            if parser.has_class(tag, "e") {
+                //add word
+            }
+            if parser.has_class(tag, "em") {
+                //add word
+            }
+        }
+
+        if current_word_type.is_some() {
+            result.push(current_word_type.unwrap());
+        }
+
+        result
     }
 
-    fn word_type_mapper(vi_type: &str) -> Option<WordType> {
+    fn parse_word_type(&self, vi_type: &str) -> Option<WordType> {
         match vi_type {
             "phó từ" => Some(WordType::Article),
             _ => None,
