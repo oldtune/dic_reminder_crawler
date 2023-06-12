@@ -2,11 +2,11 @@ use std::borrow::Borrow;
 
 use anyhow::bail;
 use async_trait::async_trait;
-use tl::{ParserOptions, VDom};
+use tl::{HTMLTag, ParserOptions, VDom};
 
 use crate::{helper::string_helper::join_split, parser::Parser};
 
-use super::{WordCrawler, WordDefinition, WordTypeDefinition};
+use super::{Meaning, WordCrawler, WordDefinition, WordType, WordTypeDefinition};
 
 pub struct EnToViCrawler {
     client: reqwest::Client,
@@ -113,7 +113,16 @@ impl EnToViCrawler {
 
         let pronounce = parser.query_selector_first_element_inner_text("div.p5l.fl.cB");
 
-        let html_tags = parser.query_selector_elements("[id^='partofspeech']");
+        let mut html_tags = parser.query_selector_elements("[id^='partofspeech']");
+
+        html_tags = html_tags
+            .into_iter()
+            .filter(|x| !parser.has_id(x, "partofspeech_100"))
+            .collect();
+
+        for tag in html_tags {
+            let divs = parser.query_selector(tag, "div");
+        }
 
         return Some(WordDefinition::new(
             &word.unwrap(),
@@ -121,10 +130,27 @@ impl EnToViCrawler {
         ));
     }
 
-    // fn get_word_type_and_example(parser: &Parser) -> Vec<WordTypeDefinition> {
-    //     let partofspeech_parts = parser.query_selector_elements("[id^='partofspeech']");
-    //     todo!()
-    // }
+    fn extract_ub_e_em(tags: Vec<&HTMLTag>, parser: &Parser) -> Vec<WordTypeDefinition> {
+        // let result = vec![];
+
+        // let mut current_word_type = None;
+
+        // for tag in tags {
+        //     if parser.has_class(tag, "ub") {
+        //         let inner_text = parser.inner_text(tag)
+        //     }
+        // }
+
+        // result
+        todo!()
+    }
+
+    fn word_type_mapper(vi_type: &str) -> Option<WordType> {
+        match vi_type {
+            "phó từ" => Some(WordType::Article),
+            _ => None,
+        }
+    }
 }
 
 #[async_trait]

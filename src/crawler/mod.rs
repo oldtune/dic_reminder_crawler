@@ -22,7 +22,7 @@ pub trait WordCrawler {
 #[derive(Debug)]
 pub struct WordDefinition {
     pub word: String,
-    pronounce: String,
+    pub pronounce: String,
     pub type_and_definitions: Vec<WordTypeDefinition>,
 }
 
@@ -39,8 +39,19 @@ impl WordDefinition {
 #[derive(Debug)]
 pub struct WordTypeDefinition {
     pub word_type: WordType,
-    pub meaning: Vec<String>,
-    pub example: Vec<String>,
+    pub meaning: Vec<Meaning>,
+}
+
+#[derive(Debug)]
+pub struct Meaning {
+    pub meaning: String,
+    pub examples: Vec<Example>,
+}
+
+#[derive(Debug)]
+pub struct Example {
+    pub sentence: String,
+    pub meaning: String,
 }
 
 #[derive(Debug)]
@@ -53,4 +64,5 @@ pub enum WordType {
     Preposition,
     Conjunction,
     Intersection,
+    Article,
 }
