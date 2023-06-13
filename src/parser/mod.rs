@@ -1,4 +1,4 @@
-use std::vec;
+use std::{borrow::Cow, vec};
 
 use tl::{HTMLTag, ParserOptions, VDom};
 
@@ -49,16 +49,9 @@ impl<'a> Parser<'a> {
     }
 
     pub fn has_class(&self, tag: &HTMLTag, class: &str) -> bool {
-        let attributes = tag.attributes();
-        for attribute in attributes.iter() {
-            if attribute.0 == "class"
-                && attribute.1.is_some()
-                && attribute.1.unwrap().contains(class)
-            {
-                return true;
-            }
-        }
-        false
+        self.match_attribute(tag, |x| {
+            x.0 == "class" && x.1.is_some() && x.1.unwrap() == class
+        })
     }
 
     pub fn query_selector_first_element_inner_text<P>(&self, selector: P) -> Option<InnerText>
@@ -107,9 +100,22 @@ impl<'a> Parser<'a> {
     }
 
     pub fn has_id(&self, tag: &HTMLTag, id: &str) -> bool {
+        self.match_attribute(tag, |x| x.0 == "id" && x.1.is_some() && x.1.unwrap() == id)
+    }
+
+    pub fn contains_id(&self, tag: &HTMLTag, id: &str) -> bool {
+        self.match_attribute(tag, |x| {
+            x.0 == "id" && x.1.is_some() && x.1.unwrap().contains(id)
+        })
+    }
+
+    pub fn match_attribute<P>(&self, tag: &HTMLTag, predicate: P) -> bool
+    where
+        P: Fn((Cow<str>, Option<Cow<str>>)) -> bool,
+    {
         let attributes = tag.attributes();
         for attribute in attributes.iter() {
-            if attribute.0 == "id" && !attribute.1.is_none() && attribute.1.unwrap() == id {
+            if predicate(attribute) {
                 return true;
             }
         }

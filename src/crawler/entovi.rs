@@ -1,4 +1,7 @@
-use std::{borrow::Borrow, thread::current};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    thread::current,
+};
 
 use anyhow::bail;
 use async_trait::async_trait;
@@ -6,7 +9,7 @@ use tl::{HTMLTag, ParserOptions, VDom};
 
 use crate::{helper::string_helper::join_split, parser::Parser};
 
-use super::{Meaning, WordCrawler, WordDefinition, WordType, WordTypeDefinition};
+use super::{Example, Meaning, WordCrawler, WordDefinition, WordType, WordTypeDefinition};
 
 pub struct EnToViCrawler {
     client: reqwest::Client,
@@ -36,64 +39,6 @@ impl EnToViCrawler {
         )
     }
 
-    // fn extract_word(&self, dom: &VDom) -> Option<String> {
-    //     let parser = dom.parser();
-    //     let query_selector_iter = dom.query_selector("div.w.fl");
-
-    //     if query_selector_iter.is_none() {
-    //         return None;
-    //     }
-
-    //     let elements = query_selector_iter.unwrap();
-
-    //     for el in elements {
-    //         let node = el.get(parser);
-    //         if node.is_none() {
-    //             continue;
-    //         }
-
-    //         let actual_node = node.unwrap();
-
-    //         match actual_node {
-    //             tl::Node::Tag(html) => {
-    //                 return Some(html.inner_text(&parser).to_string());
-    //             }
-    //             _ => continue,
-    //         }
-    //     }
-
-    //     None
-    // }
-
-    // fn query_selector_html_inner(&self, dom: &VDom) -> Option<String> {
-    //     let parser = dom.parser();
-    //     let query_selector_iter = dom.query_selector("div.p5l.fl.cB");
-
-    //     if query_selector_iter.is_none() {
-    //         return None;
-    //     }
-
-    //     let elements = query_selector_iter.unwrap();
-
-    //     for el in elements {
-    //         let node = el.get(parser);
-    //         if node.is_none() {
-    //             continue;
-    //         }
-
-    //         let actual_node = node.unwrap();
-
-    //         match actual_node {
-    //             tl::Node::Tag(html) => {
-    //                 return Some(html.inner_text(&parser).to_string());
-    //             }
-    //             _ => continue,
-    //         }
-    //     }
-
-    //     None
-    // }
-
     async fn fetch_html(&self, endpoint: &'_ str) -> reqwest::Result<String> {
         let response = self
             .client
@@ -113,15 +58,16 @@ impl EnToViCrawler {
 
         let pronounce = parser.query_selector_first_element_inner_text("div.p5l.fl.cB");
 
-        let mut html_tags = parser.query_selector_elements("[id^='partofspeech']");
+        let mut word_types = parser.query_selector_elements("[id^='partofspeech']");
 
-        html_tags = html_tags
+        word_types = word_types
             .into_iter()
             .filter(|x| !parser.has_id(x, "partofspeech_100"))
             .collect();
 
-        for tag in html_tags {
-            let divs = parser.query_selector(tag, "div");
+        for type_definition_tag in word_types.iter() {
+            dbg!(self.extract_type_definition(type_definition_tag, parser));
+            //get definition here
         }
 
         return Some(WordDefinition::new(
@@ -130,51 +76,58 @@ impl EnToViCrawler {
         ));
     }
 
-    fn extract_word_type_definition(
+    pub fn extract_type_definition(
         &self,
-        tags: Vec<&HTMLTag>,
+        tag: &HTMLTag,
         parser: &Parser,
-    ) -> Vec<WordTypeDefinition> {
-        let mut result = vec![];
-
-        let mut current_word_type: Option<WordTypeDefinition> = None;
-
-        for tag in tags {
-            if parser.has_class(tag, "ub") {
-                let inner_text = parser.inner_text(tag);
-                let word_type = self.parse_word_type(&inner_text);
-                if word_type.is_none() {
-                    let error = format!("Cannot parse this word type {}", inner_text);
-                    println!("{}", error);
-                    panic!("encoutered error");
-                }
-
-                if current_word_type.is_some() {
-                    result.push(current_word_type.unwrap());
-                }
-
-                current_word_type = Some(WordTypeDefinition {
-                    word_type: word_type.unwrap(),
+    ) -> Option<WordTypeDefinition> {
+        let inner_tags = parser.query_selector(tag, "div");
+        //must present at least 1 ub and a m
+        let mut word_type = None;
+        for div_tag in inner_tags {
+            if parser.has_class(div_tag, "ub") {
+                word_type = Some(WordTypeDefinition {
+                    word_type: parser.inner_text(div_tag),
                     meaning: vec![],
-                });
+                })
             }
-
-            if parser.has_class(tag, "m") {
-                //add word
+            if parser.has_class(div_tag, "m") {
+                let word = word_type.as_mut();
+                match word {
+                    Some(mut word_type) => word_type.meaning.push(Meaning {
+                        meaning: parser.inner_text(div_tag),
+                        examples: vec![],
+                    }),
+                    None => (),
+                }
             }
-            if parser.has_class(tag, "e") {
-                //add word
+            if parser.has_class(div_tag, "e") {
+                let word = word_type.as_mut();
+                match word {
+                    Some(mut word_type) => {
+                        let mut last_meaning = word_type.meaning.last_mut().unwrap();
+                        last_meaning.examples.push(Example {
+                            sentence: parser.inner_text(div_tag),
+                            meaning: "".to_string(),
+                        });
+                    }
+                    None => (),
+                }
             }
-            if parser.has_class(tag, "em") {
-                //add word
+            if parser.has_class(div_tag, "em") {
+                let word = word_type.as_mut();
+                match word {
+                    Some(mut word_type) => {
+                        let mut last_meaning = word_type.meaning.last_mut().unwrap();
+                        let mut last_example = last_meaning.examples.last_mut().unwrap();
+                        last_example.meaning = parser.inner_text(div_tag);
+                    }
+                    None => (),
+                }
             }
         }
 
-        if current_word_type.is_some() {
-            result.push(current_word_type.unwrap());
-        }
-
-        result
+        word_type
     }
 
     fn parse_word_type(&self, vi_type: &str) -> Option<WordType> {
@@ -197,4 +150,11 @@ impl WordCrawler for EnToViCrawler {
         }
         Ok(definition.unwrap())
     }
+}
+
+pub enum ParseError {
+    NotUbClass(String),
+    NotEClass(String),
+    NotEmClass(String),
+    NotMClass(String),
 }

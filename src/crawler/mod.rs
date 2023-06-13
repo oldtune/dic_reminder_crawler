@@ -38,7 +38,7 @@ impl WordDefinition {
 
 #[derive(Debug)]
 pub struct WordTypeDefinition {
-    pub word_type: WordType,
+    pub word_type: String,
     pub meaning: Vec<Meaning>,
 }
 
