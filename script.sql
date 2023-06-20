@@ -2,7 +2,7 @@ create table word(
     word text not null primary key,
     en_uk_pronounce text not null,
     en_us_pronounce text not null,
-    vi_pronounce text not null,
+    vi_pronounce text not null
 );
 
 create table word_type(
@@ -11,7 +11,7 @@ create table word_type(
     en text not null
 );
 
-create table create_work_type_link(
+create table word_type_link(
 id int generated always as identity,
 word text not null,
 word_type int not null

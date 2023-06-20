@@ -1,6 +1,6 @@
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
-use crawler::{entovi::EnToViCrawler, WordCrawler, WordDefinition};
+use crawler::{entovi::EnToViCrawler, WordCrawler, WordDefinition, WordTypeDefinition};
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
@@ -13,7 +13,7 @@ mod parser;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let (client, connection) = tokio_postgres::connect(
-        "host=localhost user=postgres password=admin dbname=Dic_reminder_dictionary",
+        "host=localhost user=postgres password=123456 dbname=Dic_reminder_dictionary",
         NoTls,
     )
     .await?;
@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
         let word_definition = crawler.crawl(&line).await;
         match word_definition {
             Err(err) => (),
-            Ok(definition) => insert_word_into_db(&client, &definition).await?,
+            Ok(definition) => insert_word_into_db(&client, &definition, &word_types).await?,
         };
     }
 
@@ -48,18 +48,49 @@ async fn main() -> anyhow::Result<()> {
 pub async fn insert_word_into_db(
     client: &Client,
     definition: &WordDefinition,
+    word_type_hash: &HashMap<String, i32>,
 ) -> anyhow::Result<()> {
     client.execute("insert into word (word, en_uk_pronounce, en_us_pronounce, vi_pronounce) values ($1, '', '', $2)", &[&definition.word, &definition.pronounce]).await?;
+
+    for word_definition in definition.type_and_definitions.iter() {
+        let word_type: &str = &word_definition.word_type;
+        let word_type_id = word_type_hash.get(word_type);
+        if word_type_id.is_some() {
+            insert_word_definition(
+                &definition.word,
+                &word_definition,
+                *word_type_id.unwrap(),
+                client,
+            )
+            .await?;
+        }
+    }
     Ok(())
 }
 
-async fn get_word_types(client: &Client) -> anyhow::Result<Vec<(i32, String)>> {
-    let mut result = vec![];
+pub async fn insert_word_definition(
+    word: &str,
+    word_definition: &WordTypeDefinition,
+    word_type_id: i32,
+    client: &Client,
+) -> anyhow::Result<()> {
+    client
+        .execute(
+            "insert into word_type_link (word, word_type) values($1, $2)",
+            &[&word, &word_type_id],
+        )
+        .await?;
+
+    todo!()
+}
+
+async fn get_word_types(client: &Client) -> anyhow::Result<HashMap<String, i32>> {
+    let mut result = HashMap::new();
     let word_types = client.query("SELECT * FROM WORD_TYPE", &[]).await?;
     for row in word_types {
         let id: i32 = row.get(0);
         let vi: String = row.get(1);
-        result.push((id, vi));
+        result.insert(vi.to_lowercase(), id);
     }
 
     Ok(result)
