@@ -1,3 +1,5 @@
+use std::vec;
+
 use anyhow::Error;
 use async_trait::async_trait;
 use reqwest::Request;
@@ -27,11 +29,11 @@ pub struct WordDefinition {
 }
 
 impl WordDefinition {
-    pub fn new(word: &str, pronounce: &str) -> Self {
+    pub fn new(word: &str, pronounce: &str, word_type_definition: Vec<WordTypeDefinition>) -> Self {
         Self {
             word: word.to_string(),
             pronounce: pronounce.to_string(),
-            type_and_definitions: vec![],
+            type_and_definitions: word_type_definition,
         }
     }
 }

@@ -65,14 +65,19 @@ impl EnToViCrawler {
             .filter(|x| !parser.has_id(x, "partofspeech_100"))
             .collect();
 
+        let mut word_type_definition = vec![];
+
         for type_definition_tag in word_types.iter() {
-            dbg!(self.extract_type_definition(type_definition_tag, parser));
-            //get definition here
+            let definition = self.extract_type_definition(type_definition_tag, parser);
+            if definition.is_some() {
+                word_type_definition.push(definition.unwrap());
+            }
         }
 
         return Some(WordDefinition::new(
             &word.unwrap(),
             &pronounce.unwrap_or("".to_string()),
+            word_type_definition,
         ));
     }
 
@@ -146,15 +151,9 @@ impl WordCrawler for EnToViCrawler {
         let parser = Parser::new(&html)?;
         let definition = self.get_definition(&parser);
         if definition.is_none() {
-            bail!("word not found");
+            //log not found
+            bail!(format!("Word {} not found", word));
         }
         Ok(definition.unwrap())
     }
-}
-
-pub enum ParseError {
-    NotUbClass(String),
-    NotEClass(String),
-    NotEmClass(String),
-    NotMClass(String),
 }
