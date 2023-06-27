@@ -21,14 +21,14 @@ create table word_meaning(
     id int generated always as identity,
     word_type_link_id int not null,
     vi_meaning text not null,
-    eng_meaning text not null
+    en_meaning text not null
 );
 
 create table example(
     id int generated always as identity,
     word_meaning_id int not null,
-    vi_example text not null,
-    en_meaning text not null
+    en_example text not null,
+    vi_meaning text not null
 );
 
 

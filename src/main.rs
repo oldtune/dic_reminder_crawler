@@ -1,6 +1,8 @@
+use anyhow::Ok;
+use crawler::{
+    entovi::EnToViCrawler, Example, Meaning, WordCrawler, WordDefinition, WordTypeDefinition,
+};
 use std::{collections::HashMap, path::Path};
-
-use crawler::{entovi::EnToViCrawler, Meaning, WordCrawler, WordDefinition, WordTypeDefinition};
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
@@ -38,7 +40,9 @@ async fn main() -> anyhow::Result<()> {
         let word_definition = crawler.crawl(&line).await;
         match word_definition {
             Err(err) => (),
-            Ok(definition) => insert_word_into_db(&client, &definition, &word_types).await?,
+            std::result::Result::Ok(definition) => {
+                insert_word_into_db(&client, &definition, &word_types).await?
+            }
         };
     }
 
@@ -74,15 +78,9 @@ pub async fn insert_word_definition(
     word_type_id: i32,
     client: &Client,
 ) -> anyhow::Result<()> {
-    client
-        .execute(
-            "insert into word_type_link (word, word_type) values($1, $2)",
-            &[&word, &word_type_id],
-        )
-        .await?;
     let row = client
         .query_one(
-            "select id from word_type_link where word like $1 and word_type = $2",
+            "insert into word_type_link (word, word_type) values($1, $2) returning id",
             &[&word, &word_type_id],
         )
         .await?;
@@ -90,19 +88,45 @@ pub async fn insert_word_definition(
     let word_link_id: i64 = row.get(0);
 
     for meaning in word_definition.meaning.iter() {
-        insert_meaning(meaning, word_link_id).await?;
+        insert_meaning(client, meaning, word_link_id).await?;
     }
 
     Ok(())
 }
 
-async fn insert_meaning(word_meaning: &Meaning, word_link_id: i64) -> anyhow::Result<()> {
-    todo!()
+async fn insert_meaning(
+    client: &Client,
+    word_meaning: &Meaning,
+    word_link_id: i64,
+) -> anyhow::Result<()> {
+    let row= client.query_one("insert into word_meaning (work_type_link_id, vi_meaning, en_meaning) values($1,$2,$3) returning id", &[&word_link_id, &"".to_string(), &word_meaning.meaning]).await?;
+
+    let id: i64 = row.get(0);
+
+    for example in word_meaning.examples.iter() {
+        insert_example(client, id, example);
+    }
+
+    Ok(())
+}
+
+async fn insert_example(
+    client: &Client,
+    word_meaning_id: i64,
+    example: &Example,
+) -> anyhow::Result<()> {
+    client
+        .execute(
+            "insert into example (word_meaning_id, en_example, vi_meaning) values ($1, $2, $3)",
+            &[&word_meaning_id, &example.sentence, &example.meaning],
+        )
+        .await?;
+    Ok(())
 }
 
 async fn get_word_types(client: &Client) -> anyhow::Result<HashMap<String, i32>> {
     let mut result = HashMap::new();
-    let word_types = client.query("SELECT * FROM WORD_TYPE", &[]).await?;
+    let word_types = client.query("select * from word_type", &[]).await?;
     for row in word_types {
         let id: i32 = row.get(0);
         let vi: String = row.get(1);
