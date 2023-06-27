@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::Path};
 
-use crawler::{entovi::EnToViCrawler, WordCrawler, WordDefinition, WordTypeDefinition};
+use crawler::{entovi::EnToViCrawler, Meaning, WordCrawler, WordDefinition, WordTypeDefinition};
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
@@ -13,7 +13,7 @@ mod parser;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let (client, connection) = tokio_postgres::connect(
-        "host=localhost user=postgres password=123456 dbname=Dic_reminder_dictionary",
+        "host=localhost user=postgres password=123456 dbname=dictionary",
         NoTls,
     )
     .await?;
@@ -80,7 +80,23 @@ pub async fn insert_word_definition(
             &[&word, &word_type_id],
         )
         .await?;
+    let row = client
+        .query_one(
+            "select id from word_type_link where word like $1 and word_type = $2",
+            &[&word, &word_type_id],
+        )
+        .await?;
 
+    let word_link_id: i64 = row.get(0);
+
+    for meaning in word_definition.meaning.iter() {
+        insert_meaning(meaning, word_link_id).await?;
+    }
+
+    Ok(())
+}
+
+async fn insert_meaning(word_meaning: &Meaning, word_link_id: i64) -> anyhow::Result<()> {
     todo!()
 }
 
