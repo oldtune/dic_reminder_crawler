@@ -2,7 +2,7 @@ use anyhow::Ok;
 use crawler::{
     entovi::EnToViCrawler, Example, Meaning, WordCrawler, WordDefinition, WordTypeDefinition,
 };
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, env, path::Path};
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
@@ -14,8 +14,10 @@ mod parser;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    env::set_var("RUST_BACKTRACE", "full");
+
     let (client, connection) = tokio_postgres::connect(
-        "host=localhost user=postgres password=123456 dbname=dictionary",
+        "host=localhost user=postgres password=admin dbname=dictionary",
         NoTls,
     )
     .await?;
@@ -36,14 +38,26 @@ async fn main() -> anyhow::Result<()> {
     let mut lines = buf_reader.lines();
     let crawler = EnToViCrawler::new(http_client);
 
-    if let Some(line) = lines.next_line().await? {
-        let word_definition = crawler.crawl(&line).await;
-        match word_definition {
-            Err(err) => (),
-            std::result::Result::Ok(definition) => {
-                insert_word_into_db(&client, &definition, &word_types).await?
-            }
-        };
+    loop {
+        if let Some(line) = lines.next_line().await? {
+            println!("Crawl {}", &line);
+
+            let word_definition = crawler.crawl(&line).await;
+            match word_definition {
+                Err(_) => (),
+                std::result::Result::Ok(definition) => {
+                    if definition.word != line {
+                        continue;
+                    }
+
+                    insert_word_into_db(&client, &definition, &word_types).await?;
+
+                    println!("Crawled {}", &definition.word);
+                }
+            };
+        } else {
+            break;
+        }
     }
 
     Ok(())
@@ -85,7 +99,7 @@ pub async fn insert_word_definition(
         )
         .await?;
 
-    let word_link_id: i64 = row.get(0);
+    let word_link_id: i32 = row.get(0);
 
     for meaning in word_definition.meaning.iter() {
         insert_meaning(client, meaning, word_link_id).await?;
@@ -97,14 +111,19 @@ pub async fn insert_word_definition(
 async fn insert_meaning(
     client: &Client,
     word_meaning: &Meaning,
-    word_link_id: i64,
+    word_link_id: i32,
 ) -> anyhow::Result<()> {
-    let row= client.query_one("insert into word_meaning (work_type_link_id, vi_meaning, en_meaning) values($1,$2,$3) returning id", &[&word_link_id, &"".to_string(), &word_meaning.meaning]).await?;
+    let row = client
+        .query_one(
+            "insert into word_meaning (word_type_link_id, vi_meaning, en_meaning) values($1,$2,$3) returning id",
+            &[&word_link_id, &"".to_string(), &word_meaning.meaning],
+        )
+        .await?;
 
-    let id: i64 = row.get(0);
+    let id: i32 = row.get(0);
 
     for example in word_meaning.examples.iter() {
-        insert_example(client, id, example);
+        insert_example(client, id, example).await?;
     }
 
     Ok(())
@@ -112,7 +131,7 @@ async fn insert_meaning(
 
 async fn insert_example(
     client: &Client,
-    word_meaning_id: i64,
+    word_meaning_id: i32,
     example: &Example,
 ) -> anyhow::Result<()> {
     client

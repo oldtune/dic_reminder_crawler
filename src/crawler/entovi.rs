@@ -1,15 +1,10 @@
-use std::{
-    borrow::{Borrow, BorrowMut},
-    thread::current,
-};
-
-use anyhow::bail;
+use anyhow::{bail, Context};
 use async_trait::async_trait;
-use tl::{HTMLTag, ParserOptions, VDom};
+use tl::HTMLTag;
 
 use crate::{helper::string_helper::join_split, parser::Parser};
 
-use super::{Example, Meaning, WordCrawler, WordDefinition, WordType, WordTypeDefinition};
+use super::{Example, Meaning, WordCrawler, WordDefinition, WordTypeDefinition};
 
 pub struct EnToViCrawler {
     client: reqwest::Client,
@@ -39,14 +34,16 @@ impl EnToViCrawler {
         )
     }
 
-    async fn fetch_html(&self, endpoint: &'_ str) -> reqwest::Result<String> {
+    async fn fetch_html(&self, endpoint: &'_ str) -> anyhow::Result<String> {
         let response = self
             .client
             .get(endpoint)
             .send()
-            .await?
+            .await
+            .context("Failed to fetch html")?
             .text_with_charset("utf-8")
-            .await?;
+            .await
+            .context("Failed to convert to text with charset utf8")?;
         Ok(response)
     }
 
@@ -106,11 +103,19 @@ impl EnToViCrawler {
                     None => (),
                 }
             }
+
             if parser.has_class(div_tag, "e") {
                 let word = word_type.as_mut();
                 match word {
-                    Some(mut word_type) => {
-                        let mut last_meaning = word_type.meaning.last_mut().unwrap();
+                    Some(word_type) => {
+                        let last_meaning = word_type.meaning.last_mut();
+
+                        if last_meaning.is_none() {
+                            continue;
+                        }
+
+                        let last_meaning = last_meaning.unwrap();
+
                         last_meaning.examples.push(Example {
                             sentence: parser.inner_text(div_tag),
                             meaning: "".to_string(),
@@ -119,12 +124,19 @@ impl EnToViCrawler {
                     None => (),
                 }
             }
+
             if parser.has_class(div_tag, "em") {
                 let word = word_type.as_mut();
                 match word {
-                    Some(mut word_type) => {
-                        let mut last_meaning = word_type.meaning.last_mut().unwrap();
-                        let mut last_example = last_meaning.examples.last_mut().unwrap();
+                    Some(word_type) => {
+                        let last_meaning = word_type.meaning.last_mut();
+                        if last_meaning.is_none() {
+                            continue;
+                        };
+
+                        let last_meaning = last_meaning.unwrap();
+
+                        let last_example = last_meaning.examples.last_mut().unwrap();
                         last_example.meaning = parser.inner_text(div_tag);
                     }
                     None => (),
@@ -134,21 +146,17 @@ impl EnToViCrawler {
 
         word_type
     }
-
-    fn parse_word_type(&self, vi_type: &str) -> Option<WordType> {
-        match vi_type {
-            "phó từ" => Some(WordType::Article),
-            _ => None,
-        }
-    }
 }
 
 #[async_trait]
 impl WordCrawler for EnToViCrawler {
     async fn crawl(&self, word: &str) -> anyhow::Result<super::WordDefinition> {
         let endpoint = self.construct_query_endpoint(word);
-        let html = self.fetch_html(&endpoint).await?;
-        let parser = Parser::new(&html)?;
+        let html = self
+            .fetch_html(&endpoint)
+            .await
+            .context("Failed to fetch Html")?;
+        let parser = Parser::new(&html).context("Failed to create parser html")?;
         let definition = self.get_definition(&parser);
         if definition.is_none() {
             //log not found
